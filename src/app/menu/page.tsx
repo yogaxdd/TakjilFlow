@@ -32,6 +32,8 @@ import {
 	Loader2,
 	Package,
 	Search,
+	ImageIcon,
+	Upload,
 } from "lucide-react";
 
 export default function MenuPage() {
@@ -48,6 +50,9 @@ export default function MenuPage() {
 	const [description, setDescription] = useState("");
 	const [price, setPrice] = useState("");
 	const [stockLimit, setStockLimit] = useState("");
+	const [imageFile, setImageFile] = useState<File | null>(null);
+	const [imagePreview, setImagePreview] = useState<string>("");
+	const [existingImageUrl, setExistingImageUrl] = useState("");
 
 	const supabase = createClient();
 
@@ -84,6 +89,9 @@ export default function MenuPage() {
 		setDescription("");
 		setPrice("");
 		setStockLimit("");
+		setImageFile(null);
+		setImagePreview("");
+		setExistingImageUrl("");
 		setEditProduct(null);
 	};
 
@@ -93,7 +101,20 @@ export default function MenuPage() {
 		setDescription(product.description || "");
 		setPrice(product.price.toString());
 		setStockLimit(product.stock_limit.toString());
+		setImageFile(null);
+		setImagePreview("");
+		setExistingImageUrl(product.image_url || "");
 		setIsDialogOpen(true);
+	};
+
+	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (file) {
+			setImageFile(file);
+			const reader = new FileReader();
+			reader.onload = () => setImagePreview(reader.result as string);
+			reader.readAsDataURL(file);
+		}
 	};
 
 	const openCreateDialog = () => {
@@ -111,11 +132,27 @@ export default function MenuPage() {
 			} = await supabase.auth.getUser();
 			if (!user) throw new Error("Not authenticated");
 
+			// Upload image if new file selected
+			let finalImageUrl = existingImageUrl;
+			if (imageFile) {
+				const fileExt = imageFile.name.split(".").pop();
+				const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+				const { error: uploadError } = await supabase.storage
+					.from("product-images")
+					.upload(fileName, imageFile, { upsert: true });
+				if (uploadError) throw uploadError;
+				const { data: urlData } = supabase.storage
+					.from("product-images")
+					.getPublicUrl(fileName);
+				finalImageUrl = urlData.publicUrl;
+			}
+
 			const productData = {
 				name,
 				description,
 				price: parseInt(price),
 				stock_limit: parseInt(stockLimit),
+				image_url: finalImageUrl,
 				user_id: user.id,
 			};
 
@@ -258,6 +295,30 @@ export default function MenuPage() {
 									/>
 								</div>
 							</div>
+							<div className="space-y-2">
+								<Label htmlFor="imageFile">Gambar Produk (opsional)</Label>
+								<div className="flex items-center gap-3">
+									<label
+										htmlFor="imageFile"
+										className="flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-gray-300 cursor-pointer hover:bg-gray-50 hover:border-emerald-400 transition-colors text-sm text-gray-600"
+									>
+										<Upload className="w-4 h-4" />
+										{imageFile ? imageFile.name : "Pilih gambar..."}
+									</label>
+									<input
+										id="imageFile"
+										type="file"
+										accept="image/*"
+										onChange={handleImageChange}
+										className="hidden"
+									/>
+								</div>
+								{(imagePreview || existingImageUrl) && (
+									<div className="rounded-xl overflow-hidden border border-gray-200 h-32 bg-gray-50 relative">
+										<img src={imagePreview || existingImageUrl} alt="Preview" className="w-full h-full object-cover" />
+									</div>
+								)}
+							</div>
 							<DialogFooter className="gap-2">
 								<DialogClose asChild>
 									<Button
@@ -330,13 +391,24 @@ export default function MenuPage() {
 							{filteredProducts.map((product) => (
 								<TableRow key={product.id} className="hover:bg-gray-50/50">
 									<TableCell>
-										<div>
-											<p className="font-medium text-gray-900">{product.name}</p>
-											{product.description && (
-												<p className="text-sm text-muted-foreground line-clamp-1">
-													{product.description}
-												</p>
+										<div className="flex items-center gap-3">
+											{product.image_url ? (
+												<div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+													<img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+												</div>
+											) : (
+												<div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+													<ImageIcon className="w-5 h-5 text-emerald-400" />
+												</div>
 											)}
+											<div>
+												<p className="font-medium text-gray-900">{product.name}</p>
+												{product.description && (
+													<p className="text-sm text-muted-foreground line-clamp-1">
+														{product.description}
+													</p>
+												)}
+											</div>
 										</div>
 									</TableCell>
 									<TableCell>

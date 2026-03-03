@@ -5,6 +5,7 @@ export interface Product {
   description: string;
   price: number;
   stock_limit: number;
+  image_url: string;
   created_at: string;
 }
 
@@ -14,6 +15,8 @@ export interface Order {
   quantity: number;
   customer_name: string;
   customer_phone: string;
+  customer_address: string;
+  payment_method: string;
   status: string;
   created_at: string;
   products?: Product;

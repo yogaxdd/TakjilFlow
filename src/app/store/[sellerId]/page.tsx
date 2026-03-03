@@ -6,6 +6,7 @@ import { Product } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
 	Card,
 	CardContent,
@@ -21,6 +22,12 @@ import {
 	ShoppingCart,
 	Store,
 	CheckCircle2,
+	ImageIcon,
+	MapPin,
+	CreditCard,
+	Smartphone,
+	Truck,
+	QrCode,
 } from "lucide-react";
 import { useParams } from "next/navigation";
 
@@ -37,6 +44,8 @@ export default function StorePage() {
 	const [cart, setCart] = useState<CartItem[]>([]);
 	const [customerName, setCustomerName] = useState("");
 	const [customerPhone, setCustomerPhone] = useState("");
+	const [customerAddress, setCustomerAddress] = useState("");
+	const [paymentMethod, setPaymentMethod] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 	const [orderSuccess, setOrderSuccess] = useState(false);
 	const [orderedItems, setOrderedItems] = useState<{ [productId: string]: number }>({});
@@ -69,11 +78,12 @@ export default function StorePage() {
 
 	const fetchExistingOrders = async () => {
 		try {
-			// Fetch today's orders to calculate remaining stock
+			// Fetch today's orders to calculate remaining stock (excluding cancelled)
 			const today = new Date().toISOString().split("T")[0];
 			const { data: orders } = await supabase
 				.from("orders")
 				.select("product_id, quantity")
+				.neq("status", "cancelled")
 				.gte("created_at", `${today}T00:00:00`)
 				.lte("created_at", `${today}T23:59:59`);
 
@@ -177,6 +187,8 @@ export default function StorePage() {
 				quantity: item.quantity,
 				customer_name: customerName,
 				customer_phone: customerPhone,
+				customer_address: customerAddress,
+				payment_method: paymentMethod,
 				status: "pending",
 			}));
 
@@ -187,6 +199,8 @@ export default function StorePage() {
 			setCart([]);
 			setCustomerName("");
 			setCustomerPhone("");
+			setCustomerAddress("");
+			setPaymentMethod("");
 			fetchExistingOrders();
 			toast.success("Pesanan berhasil dikirim!");
 		} catch (error: unknown) {
@@ -285,8 +299,14 @@ export default function StorePage() {
 											className={`rounded-2xl border-0 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden ${isSoldOut ? "opacity-60" : ""
 												}`}
 										>
-											<div className="h-2 bg-gradient-to-r from-emerald-400 to-emerald-600" />
-											<CardContent className="p-5">
+											{product.image_url ? (
+												<div className="h-36 -mx-5 -mt-5 mb-4 bg-gray-100 overflow-hidden">
+													<img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+												</div>
+											) : (
+												<div className="h-2 bg-gradient-to-r from-emerald-400 to-emerald-600 -mx-5 -mt-5 mb-4" />
+											)}
+											<CardContent className="p-5 pt-0">
 												<div className="flex justify-between items-start mb-3">
 													<div>
 														<h3 className="font-semibold text-gray-900">
@@ -306,8 +326,8 @@ export default function StorePage() {
 														</p>
 														<p
 															className={`text-xs ${isSoldOut
-																	? "text-red-500 font-medium"
-																	: "text-muted-foreground"
+																? "text-red-500 font-medium"
+																: "text-muted-foreground"
 																}`}
 														>
 															{isSoldOut
@@ -434,10 +454,71 @@ export default function StorePage() {
 													className="rounded-xl h-10"
 												/>
 											</div>
+											<div className="space-y-1.5">
+												<Label htmlFor="customerAddress" className="text-xs">
+													Alamat Pengiriman
+												</Label>
+												<Textarea
+													id="customerAddress"
+													value={customerAddress}
+													onChange={(e) => setCustomerAddress(e.target.value)}
+													placeholder="Alamat lengkap untuk pengiriman..."
+													required
+													className="rounded-xl resize-none"
+													rows={2}
+												/>
+											</div>
+											<div className="space-y-2">
+												<Label className="text-xs">Metode Pembayaran</Label>
+												<div className="grid grid-cols-2 gap-2">
+													{[
+														{ value: "qris", label: "QRIS", icon: QrCode },
+														{ value: "dana", label: "Dana", icon: Smartphone },
+														{ value: "gopay", label: "GoPay", icon: Smartphone },
+														{ value: "shopeepay", label: "ShopeePay", icon: Smartphone },
+														{ value: "cod", label: "COD", icon: Truck },
+													].map((method) => (
+														<button
+															key={method.value}
+															type="button"
+															onClick={() => setPaymentMethod(method.value)}
+															className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-medium transition-all ${paymentMethod === method.value
+																? "border-emerald-500 bg-emerald-50 text-emerald-700"
+																: "border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+																}`}
+														>
+															<method.icon className="w-3.5 h-3.5" />
+															{method.label}
+														</button>
+													))}
+												</div>
+												{paymentMethod === "qris" && (
+													<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-center">
+														<p className="text-xs text-emerald-700 font-medium mb-2">Scan QRIS untuk pembayaran</p>
+														<div className="bg-white rounded-lg p-2 inline-block">
+															<img src="/qris.png" alt="QRIS" className="w-40 h-40 object-contain mx-auto" />
+														</div>
+														<p className="text-[10px] text-emerald-600 mt-2">Kirim bukti transfer ke penjual</p>
+													</div>
+												)}
+												{(paymentMethod === "dana" || paymentMethod === "gopay" || paymentMethod === "shopeepay") && (
+													<div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+														<p className="text-xs text-blue-700 font-medium">Transfer ke nomor:</p>
+														<p className="text-lg font-bold text-blue-900 mt-1">083843173660</p>
+														<p className="text-[10px] text-blue-600 mt-1">a.n Penjual — Kirim bukti transfer ke penjual</p>
+													</div>
+												)}
+												{paymentMethod === "cod" && (
+													<div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+														<p className="text-xs text-orange-700 font-medium">💵 Bayar langsung saat pengiriman</p>
+														<p className="text-[10px] text-orange-600 mt-1">Siapkan uang pas ya!</p>
+													</div>
+												)}
+											</div>
 											<Button
 												type="submit"
 												className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 font-semibold shadow-lg shadow-emerald-200 hover:shadow-emerald-300 transition-all"
-												disabled={submitting || cart.length === 0}
+												disabled={submitting || cart.length === 0 || !paymentMethod}
 											>
 												{submitting ? (
 													<Loader2 className="w-4 h-4 mr-2 animate-spin" />

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS products (
   description TEXT DEFAULT '',
   price INTEGER NOT NULL DEFAULT 0,
   stock_limit INTEGER NOT NULL DEFAULT 0,
+  image_url TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -27,6 +28,8 @@ CREATE TABLE IF NOT EXISTS orders (
   quantity INTEGER NOT NULL DEFAULT 1,
   customer_name TEXT NOT NULL,
   customer_phone TEXT NOT NULL,
+  customer_address TEXT DEFAULT '',
+  payment_method TEXT NOT NULL DEFAULT 'cod',
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -97,3 +100,46 @@ CREATE POLICY "Sellers can update their product orders"
       AND products.user_id = auth.uid()
     )
   );
+
+-- =============================================
+-- STORAGE BUCKET (product images)
+-- =============================================
+-- Run this in SQL Editor or create the bucket manually in Supabase Dashboard:
+-- 1. Go to Storage > New Bucket
+-- 2. Name: "product-images"
+-- 3. Set as PUBLIC bucket
+--
+-- Then add these storage policies:
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('product-images', 'product-images', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Anyone can view product images (public)
+CREATE POLICY "Public read product images"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'product-images');
+
+-- Authenticated users can upload images
+CREATE POLICY "Authenticated users can upload product images"
+ON storage.objects FOR INSERT
+WITH CHECK (
+  bucket_id = 'product-images'
+  AND auth.role() = 'authenticated'
+);
+
+-- Users can update their own uploaded images
+CREATE POLICY "Users can update own product images"
+ON storage.objects FOR UPDATE
+USING (
+  bucket_id = 'product-images'
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
+-- Users can delete their own uploaded images
+CREATE POLICY "Users can delete own product images"
+ON storage.objects FOR DELETE
+USING (
+  bucket_id = 'product-images'
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
