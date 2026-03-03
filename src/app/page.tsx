@@ -52,18 +52,18 @@ export default function LandingPage() {
             <div className="space-y-8">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-medium">
                 <Zap className="w-4 h-4" />
-                Smart Preorder Management
+                Kelola Preorder Takjil dengan Mudah
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight tracking-tight">
-                Stop Overproducing Takjil.{" "}
+                Berhenti Produksi Berlebih.{" "}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-emerald-400">
-                  Let Data Optimize
+                  Kelola Pesanan Takjil
                 </span>{" "}
-                Your Ramadhan Sales.
+                Ramadhan Lebih Cerdas.
               </h1>
               <p className="text-lg sm:text-xl text-gray-500 leading-relaxed max-w-lg">
-                Smart preorder management dengan optimasi produksi berbasis data.
-                Kelola pesanan takjil Ramadhan Anda dengan lebih efisien.
+                Sistem preorder digital yang membantu penjual takjil UMKM
+                mengelola pesanan, mengontrol stok, dan menganalisis penjualan.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link href="/register">
@@ -203,10 +203,10 @@ export default function LandingPage() {
               Fitur Utama
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-              Semua yang Anda Butuhkan
+              Semua Fitur yang Anda Butuhkan
             </h2>
             <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-              Kelola bisnis takjil Ramadhan Anda dengan tools yang tepat.
+              Kelola bisnis takjil Ramadhan Anda dengan fitur yang lengkap.
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">

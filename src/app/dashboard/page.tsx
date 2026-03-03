@@ -5,10 +5,16 @@ import { createClient } from "@/lib/supabase";
 import { Product, Order, SalesData, DashboardStats } from "@/types";
 import StatCard from "@/components/stat-card";
 import DailyOrdersChart from "@/components/daily-orders-chart";
-import { Package, ShoppingCart, TrendingUp, Percent, Copy, CheckCheck } from "lucide-react";
+import { Package, ShoppingCart, TrendingUp, Percent, Copy, CheckCheck, DollarSign, BarChart3, Crown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
+interface ProductRanking {
+	name: string;
+	totalSold: number;
+	revenue: number;
+}
 
 export default function DashboardPage() {
 	const [stats, setStats] = useState<DashboardStats>({
@@ -16,9 +22,12 @@ export default function DashboardPage() {
 		ordersToday: 0,
 		totalItemsSold: 0,
 		stockSoldPercentage: 0,
+		totalRevenue: 0,
+		averageOrderValue: 0,
 	});
 	const [chartData, setChartData] = useState<SalesData[]>([]);
 	const [recentOrders, setRecentOrders] = useState<Order[]>([]);
+	const [bestSelling, setBestSelling] = useState<ProductRanking[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [userId, setUserId] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
@@ -30,54 +39,67 @@ export default function DashboardPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
+	const formatRupiah = (amount: number) =>
+		new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(amount);
+
 	const fetchDashboardData = async () => {
 		try {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
+			const { data: { user } } = await supabase.auth.getUser();
 			if (!user) return;
 			setUserId(user.id);
 
-			// Fetch products
 			const { data: products } = await supabase
-				.from("products")
-				.select("*")
-				.eq("user_id", user.id);
+				.from("products").select("*").eq("user_id", user.id);
 
-			// Fetch orders for user's products
 			const productIds = (products || []).map((p: Product) => p.id);
 			let orders: Order[] = [];
 			if (productIds.length > 0) {
 				const { data: ordersData } = await supabase
-					.from("orders")
-					.select("*, products(*)")
+					.from("orders").select("*, products(*)")
 					.in("product_id", productIds)
+					.neq("status", "cancelled")
 					.order("created_at", { ascending: false });
 				orders = ordersData || [];
 			}
 
-			// Calculate stats
 			const today = new Date().toISOString().split("T")[0];
-			const todayOrders = orders.filter(
-				(o) => o.created_at.split("T")[0] === today
-			);
+			const todayOrders = orders.filter((o) => o.created_at.split("T")[0] === today);
 			const totalItemsSold = orders.reduce((acc, o) => acc + o.quantity, 0);
-			const totalStock = (products || []).reduce(
-				(acc: number, p: Product) => acc + p.stock_limit,
-				0
-			);
-			const stockSoldPercentage =
-				totalStock > 0 ? Math.round((totalItemsSold / totalStock) * 100) : 0;
+			const totalStock = (products || []).reduce((acc: number, p: Product) => acc + p.stock_limit, 0);
+			const stockSoldPercentage = totalStock > 0 ? Math.round((totalItemsSold / totalStock) * 100) : 0;
+
+			// Revenue calculation
+			const totalRevenue = orders.reduce((acc, o) => {
+				const price = o.products?.price || 0;
+				return acc + (price * o.quantity) - (o.discount_amount || 0);
+			}, 0);
+			const averageOrderValue = orders.length > 0 ? Math.round(totalRevenue / orders.length) : 0;
 
 			setStats({
 				totalProducts: (products || []).length,
 				ordersToday: todayOrders.length,
 				totalItemsSold,
 				stockSoldPercentage: Math.min(stockSoldPercentage, 100),
+				totalRevenue,
+				averageOrderValue,
 			});
 
-			// Recent orders
 			setRecentOrders(orders.slice(0, 5));
+
+			// Best selling products
+			const productSales: { [key: string]: ProductRanking } = {};
+			orders.forEach((o) => {
+				const name = o.products?.name || "Unknown";
+				const price = o.products?.price || 0;
+				if (!productSales[name]) {
+					productSales[name] = { name, totalSold: 0, revenue: 0 };
+				}
+				productSales[name].totalSold += o.quantity;
+				productSales[name].revenue += price * o.quantity;
+			});
+			setBestSelling(
+				Object.values(productSales).sort((a, b) => b.totalSold - a.totalSold).slice(0, 5)
+			);
 
 			// Build chart data for last 7 days
 			const last7Days: SalesData[] = [];
@@ -85,22 +107,19 @@ export default function DashboardPage() {
 				const date = new Date();
 				date.setDate(date.getDate() - i);
 				const dateStr = date.toISOString().split("T")[0];
-				const dayOrders = orders.filter(
-					(o) => o.created_at.split("T")[0] === dateStr
-				);
+				const dayOrders = orders.filter((o) => o.created_at.split("T")[0] === dateStr);
 				const dayItems = dayOrders.reduce((acc, o) => acc + o.quantity, 0);
+				const dayRevenue = dayOrders.reduce((acc, o) => acc + ((o.products?.price || 0) * o.quantity), 0);
 				last7Days.push({
-					date: date.toLocaleDateString("id-ID", {
-						day: "numeric",
-						month: "short",
-					}),
+					date: date.toLocaleDateString("id-ID", { day: "numeric", month: "short" }),
 					orders: dayOrders.length,
 					items: dayItems,
+					revenue: dayRevenue,
 				});
 			}
 			setChartData(last7Days);
 		} catch (error) {
-			console.error("Error fetching dashboard data:", error);
+			console.error("Error:", error);
 		} finally {
 			setLoading(false);
 		}
@@ -120,15 +139,11 @@ export default function DashboardPage() {
 		return (
 			<div className="space-y-6">
 				<div className="h-8 w-48 bg-gray-200 rounded-lg animate-pulse" />
-				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-					{[...Array(4)].map((_, i) => (
-						<div
-							key={i}
-							className="h-32 bg-white rounded-2xl shadow-sm animate-pulse"
-						/>
+				<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+					{[...Array(6)].map((_, i) => (
+						<div key={i} className="h-32 bg-white rounded-2xl shadow-sm animate-pulse" />
 					))}
 				</div>
-				<div className="h-[400px] bg-white rounded-2xl shadow-sm animate-pulse" />
 			</div>
 		);
 	}
@@ -138,109 +153,126 @@ export default function DashboardPage() {
 			{/* Header */}
 			<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 				<div>
-					<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
-						Dashboard
-					</h1>
-					<p className="text-muted-foreground mt-1">
-						Ringkasan penjualan takjil Anda hari ini
-					</p>
+					<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
+					<p className="text-muted-foreground mt-1">Ringkasan penjualan takjil Anda</p>
 				</div>
-				{userId && (
-					<Button
-						variant="outline"
-						onClick={copyStoreLink}
-						className="rounded-xl gap-2 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300"
-					>
-						{copied ? (
-							<CheckCheck className="w-4 h-4 text-emerald-600" />
-						) : (
-							<Copy className="w-4 h-4" />
-						)}
-						{copied ? "Disalin!" : "Salin Link Toko"}
-					</Button>
-				)}
+				<div className="flex gap-2">
+					{userId && (
+						<Button
+							variant="outline"
+							onClick={copyStoreLink}
+							className="rounded-xl gap-2 border-emerald-200 hover:bg-emerald-50"
+						>
+							{copied ? <CheckCheck className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+							{copied ? "Disalin!" : "Salin Link Toko"}
+						</Button>
+					)}
+				</div>
+			</div>
+
+			{/* Revenue Highlight */}
+			<div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200">
+				<div className="flex items-center justify-between">
+					<div>
+						<p className="text-emerald-100 text-sm font-medium">Total Pendapatan</p>
+						<p className="text-3xl font-bold mt-1">{formatRupiah(stats.totalRevenue)}</p>
+						<p className="text-emerald-200 text-xs mt-2">
+							Rata-rata per pesanan: {formatRupiah(stats.averageOrderValue)}
+						</p>
+					</div>
+					<div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center">
+						<DollarSign className="w-7 h-7 text-white" />
+					</div>
+				</div>
 			</div>
 
 			{/* Stat Cards */}
 			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-				<StatCard
-					title="Total Produk"
-					value={stats.totalProducts}
-					icon={Package}
-					color="emerald"
-				/>
-				<StatCard
-					title="Pesanan Hari Ini"
-					value={stats.ordersToday}
-					icon={ShoppingCart}
-					color="orange"
-				/>
-				<StatCard
-					title="Total Item Terjual"
-					value={stats.totalItemsSold}
-					icon={TrendingUp}
-					color="blue"
-				/>
-				<StatCard
-					title="% Stok Terjual"
-					value={`${stats.stockSoldPercentage}%`}
-					icon={Percent}
-					color="purple"
-				/>
+				<StatCard title="Total Produk" value={stats.totalProducts} icon={Package} color="emerald" />
+				<StatCard title="Pesanan Hari Ini" value={stats.ordersToday} icon={ShoppingCart} color="orange" />
+				<StatCard title="Total Item Terjual" value={stats.totalItemsSold} icon={TrendingUp} color="blue" />
+				<StatCard title="% Stok Terjual" value={`${stats.stockSoldPercentage}%`} icon={Percent} color="purple" />
 			</div>
 
-			{/* Chart */}
-			<DailyOrdersChart data={chartData} />
+			{/* Chart + Best Selling */}
+			<div className="grid lg:grid-cols-3 gap-6">
+				<div className="lg:col-span-2">
+					<DailyOrdersChart data={chartData} />
+				</div>
+				<div className="bg-white rounded-2xl shadow-sm p-6">
+					<h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+						<Crown className="w-5 h-5 text-orange-500" /> Produk Terlaris
+					</h2>
+					{bestSelling.length === 0 ? (
+						<div className="text-center py-8 text-muted-foreground">
+							<BarChart3 className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+							<p className="text-sm">Belum ada data penjualan</p>
+						</div>
+					) : (
+						<div className="space-y-3">
+							{bestSelling.map((product, i) => (
+								<div key={product.name} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
+									<div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${i === 0 ? "bg-yellow-100 text-yellow-700" :
+											i === 1 ? "bg-gray-200 text-gray-600" :
+												i === 2 ? "bg-orange-100 text-orange-700" :
+													"bg-gray-100 text-gray-500"
+										}`}>
+										{i + 1}
+									</div>
+									<div className="flex-1 min-w-0">
+										<p className="font-medium text-gray-900 text-sm truncate">{product.name}</p>
+										<p className="text-xs text-muted-foreground">{product.totalSold} terjual</p>
+									</div>
+									<span className="text-sm font-semibold text-emerald-600">{formatRupiah(product.revenue)}</span>
+								</div>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
 
 			{/* Recent Orders */}
 			<div className="bg-white rounded-2xl shadow-sm p-6">
-				<h2 className="text-lg font-semibold text-gray-900 mb-4">
-					Pesanan Terbaru
-				</h2>
+				<h2 className="text-lg font-semibold text-gray-900 mb-4">Pesanan Terbaru</h2>
 				{recentOrders.length === 0 ? (
 					<div className="text-center py-12 text-muted-foreground">
 						<ShoppingCart className="w-12 h-12 mx-auto mb-3 text-gray-300" />
 						<p>Belum ada pesanan masuk</p>
-						<p className="text-sm mt-1">
-							Bagikan link toko Anda untuk mulai menerima pesanan
-						</p>
+						<p className="text-sm mt-1">Bagikan link toko Anda untuk mulai menerima pesanan</p>
 					</div>
 				) : (
 					<div className="space-y-3">
 						{recentOrders.map((order) => (
-							<div
-								key={order.id}
-								className="flex items-center justify-between p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors"
-							>
+							<div key={order.id} className="flex items-center justify-between p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors">
 								<div className="flex items-center gap-4">
 									<div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
 										<ShoppingCart className="w-5 h-5 text-emerald-600" />
 									</div>
 									<div>
-										<p className="font-medium text-gray-900">
-											{order.customer_name}
-										</p>
+										<p className="font-medium text-gray-900">{order.customer_name}</p>
 										<p className="text-sm text-muted-foreground">
 											{order.products?.name} × {order.quantity}
+											{order.products && (
+												<span className="ml-2 font-medium text-emerald-600">
+													{formatRupiah(order.products.price * order.quantity)}
+												</span>
+											)}
 										</p>
 									</div>
 								</div>
 								<div className="text-right">
-									<Badge
-										variant={order.status === "pending" ? "secondary" : "default"}
-										className={`rounded-lg ${order.status === "pending"
-												? "bg-orange-50 text-orange-600 border-orange-200"
-												: "bg-emerald-50 text-emerald-600 border-emerald-200"
-											}`}
-									>
-										{order.status === "pending" ? "Menunggu" : order.status}
+									<Badge variant="secondary" className={`rounded-lg ${order.status === "pending" ? "bg-orange-50 text-orange-600 border-orange-200" :
+											order.status === "confirmed" ? "bg-blue-50 text-blue-600 border-blue-200" :
+												order.status === "done" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+													"bg-red-50 text-red-600 border-red-200"
+										}`}>
+										{order.status === "pending" ? "Menunggu" :
+											order.status === "confirmed" ? "Dikonfirmasi" :
+												order.status === "done" ? "Selesai" : "Dibatalkan"}
 									</Badge>
 									<p className="text-xs text-muted-foreground mt-1">
 										{new Date(order.created_at).toLocaleDateString("id-ID", {
-											day: "numeric",
-											month: "short",
-											hour: "2-digit",
-											minute: "2-digit",
+											day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
 										})}
 									</p>
 								</div>

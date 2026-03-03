@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+	Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
 	Dialog,
 	DialogContent,
 	DialogHeader,
@@ -53,6 +56,9 @@ export default function MenuPage() {
 	const [imageFile, setImageFile] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string>("");
 	const [existingImageUrl, setExistingImageUrl] = useState("");
+	const [category, setCategory] = useState("Lainnya");
+
+	const categories = ["Kolak", "Es", "Gorengan", "Kue", "Minuman", "Lainnya"];
 
 	const supabase = createClient();
 
@@ -92,6 +98,7 @@ export default function MenuPage() {
 		setImageFile(null);
 		setImagePreview("");
 		setExistingImageUrl("");
+		setCategory("Lainnya");
 		setEditProduct(null);
 	};
 
@@ -104,6 +111,7 @@ export default function MenuPage() {
 		setImageFile(null);
 		setImagePreview("");
 		setExistingImageUrl(product.image_url || "");
+		setCategory(product.category || "Lainnya");
 		setIsDialogOpen(true);
 	};
 
@@ -153,6 +161,7 @@ export default function MenuPage() {
 				price: parseInt(price),
 				stock_limit: parseInt(stockLimit),
 				image_url: finalImageUrl,
+				category,
 				user_id: user.id,
 			};
 
@@ -255,6 +264,21 @@ export default function MenuPage() {
 									required
 									className="rounded-xl"
 								/>
+							</div>
+							<div className="grid grid-cols-2 gap-4">
+								<div className="space-y-2 col-span-2">
+									<Label>Kategori</Label>
+									<Select value={category} onValueChange={setCategory}>
+										<SelectTrigger className="rounded-xl">
+											<SelectValue placeholder="Pilih kategori" />
+										</SelectTrigger>
+										<SelectContent>
+											{categories.map((cat) => (
+												<SelectItem key={cat} value={cat}>{cat}</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
 							</div>
 							<div className="space-y-2">
 								<Label htmlFor="description">Deskripsi</Label>

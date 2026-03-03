@@ -39,6 +39,8 @@ import {
 	Filter,
 	Eye,
 	CreditCard,
+	Download,
+	CheckCheck,
 } from "lucide-react";
 
 export default function OrdersPage() {
@@ -106,6 +108,54 @@ export default function OrdersPage() {
 			console.error("Error updating order:", error);
 			toast.error("Gagal memperbarui status");
 		}
+	};
+
+	const exportCSV = () => {
+		const headers = ["Nama", "Telepon", "Alamat", "Produk", "Qty", "Total", "Bayar", "Status", "Waktu"];
+		const rows = filteredOrders.map((o) => [
+			o.customer_name,
+			o.customer_phone,
+			o.customer_address || "-",
+			o.products?.name || "-",
+			o.quantity,
+			o.products ? o.products.price * o.quantity : 0,
+			getPaymentLabel(o.payment_method),
+			getStatusLabel(o.status),
+			new Date(o.created_at).toLocaleString("id-ID"),
+		]);
+		const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
+		const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = `pesanan_${new Date().toISOString().split("T")[0]}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+		toast.success("Data pesanan berhasil diexport!");
+	};
+
+	const bulkConfirmPending = async () => {
+		const pending = orders.filter((o) => o.status === "pending");
+		if (pending.length === 0) { toast.info("Tidak ada pesanan menunggu"); return; }
+		try {
+			const ids = pending.map((o) => o.id);
+			const { error } = await supabase.from("orders").update({ status: "confirmed" }).in("id", ids);
+			if (error) throw error;
+			toast.success(`${pending.length} pesanan dikonfirmasi!`);
+			fetchOrders();
+		} catch { toast.error("Gagal konfirmasi massal"); }
+	};
+
+	const bulkDoneConfirmed = async () => {
+		const confirmed = orders.filter((o) => o.status === "confirmed");
+		if (confirmed.length === 0) { toast.info("Tidak ada pesanan dikonfirmasi"); return; }
+		try {
+			const ids = confirmed.map((o) => o.id);
+			const { error } = await supabase.from("orders").update({ status: "done" }).in("id", ids);
+			if (error) throw error;
+			toast.success(`${confirmed.length} pesanan diselesaikan!`);
+			fetchOrders();
+		} catch { toast.error("Gagal menyelesaikan massal"); }
 	};
 
 	const formatRupiah = (amount: number) => {
@@ -201,6 +251,23 @@ export default function OrdersPage() {
 				</p>
 			</div>
 
+			{/* Action Buttons */}
+			<div className="flex flex-wrap gap-2">
+				<Button onClick={exportCSV} variant="outline" className="rounded-xl gap-2" size="sm">
+					<Download className="w-4 h-4" /> Export CSV
+				</Button>
+				{orderStats.pending > 0 && (
+					<Button onClick={bulkConfirmPending} className="rounded-xl gap-2 bg-blue-600 hover:bg-blue-700 text-white" size="sm">
+						<CheckCheck className="w-4 h-4" /> Konfirmasi Semua ({orderStats.pending})
+					</Button>
+				)}
+				{orderStats.confirmed > 0 && (
+					<Button onClick={bulkDoneConfirmed} className="rounded-xl gap-2 bg-emerald-600 hover:bg-emerald-700 text-white" size="sm">
+						<CheckCheck className="w-4 h-4" /> Selesaikan Semua ({orderStats.confirmed})
+					</Button>
+				)}
+			</div>
+
 			{/* Quick Stats */}
 			<div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 				<div className="bg-white rounded-2xl p-4 shadow-sm">
@@ -248,111 +315,113 @@ export default function OrdersPage() {
 			</div>
 
 			{/* Orders Table */}
-			{filteredOrders.length === 0 ? (
-				<div className="bg-white rounded-2xl shadow-sm p-16 text-center">
-					<ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-					<h3 className="text-lg font-semibold text-gray-900 mb-2">
-						{orders.length === 0 ? "Belum ada pesanan" : "Tidak ada hasil"}
-					</h3>
-					<p className="text-muted-foreground">
-						{orders.length === 0
-							? "Pesanan dari pelanggan akan muncul di sini."
-							: "Coba ubah filter atau kata kunci pencarian."}
-					</p>
-				</div>
-			) : (
-				<div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-					<Table>
-						<TableHeader>
-							<TableRow className="hover:bg-transparent">
-								<TableHead className="font-semibold">Pelanggan</TableHead>
-								<TableHead className="font-semibold">Produk</TableHead>
-								<TableHead className="font-semibold">Qty</TableHead>
-								<TableHead className="font-semibold">Total</TableHead>
-								<TableHead className="font-semibold">Bayar</TableHead>
-								<TableHead className="font-semibold">Status</TableHead>
-								<TableHead className="font-semibold">Waktu</TableHead>
-								<TableHead className="font-semibold text-right">Aksi</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{filteredOrders.map((order) => (
-								<TableRow key={order.id} className="hover:bg-gray-50/50">
-									<TableCell>
-										<div className="space-y-0.5">
-											<p className="font-medium text-gray-900 flex items-center gap-1.5">
-												<User className="w-3.5 h-3.5 text-gray-400" />
-												{order.customer_name}
-											</p>
-											<p className="text-xs text-muted-foreground flex items-center gap-1.5">
-												<Phone className="w-3 h-3" />
-												{order.customer_phone}
-											</p>
-											{order.customer_address && (
-												<p className="text-xs text-muted-foreground flex items-start gap-1.5">
-													<MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" />
-													<span className="line-clamp-1">{order.customer_address}</span>
-												</p>
-											)}
-										</div>
-									</TableCell>
-									<TableCell>
-										<span className="font-medium text-gray-900">
-											{order.products?.name || "-"}
-										</span>
-									</TableCell>
-									<TableCell>
-										<span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-sm font-medium">
-											{order.quantity}
-										</span>
-									</TableCell>
-									<TableCell>
-										<span className="font-medium text-emerald-600">
-											{order.products
-												? formatRupiah(order.products.price * order.quantity)
-												: "-"}
-										</span>
-									</TableCell>
-									<TableCell>
-										<span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600">
-											<CreditCard className="w-3 h-3" />
-											{getPaymentLabel(order.payment_method)}
-										</span>
-									</TableCell>
-									<TableCell>
-										<Badge
-											variant="secondary"
-											className={`rounded-lg ${getStatusColor(order.status)}`}
-										>
-											{getStatusLabel(order.status)}
-										</Badge>
-									</TableCell>
-									<TableCell>
-										<span className="text-sm text-muted-foreground">
-											{new Date(order.created_at).toLocaleDateString("id-ID", {
-												day: "numeric",
-												month: "short",
-												hour: "2-digit",
-												minute: "2-digit",
-											})}
-										</span>
-									</TableCell>
-									<TableCell className="text-right">
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => setSelectedOrder(order)}
-											className="rounded-lg hover:bg-emerald-50 hover:text-emerald-600"
-										>
-											<Eye className="w-4 h-4" />
-										</Button>
-									</TableCell>
+			{
+				filteredOrders.length === 0 ? (
+					<div className="bg-white rounded-2xl shadow-sm p-16 text-center">
+						<ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+						<h3 className="text-lg font-semibold text-gray-900 mb-2">
+							{orders.length === 0 ? "Belum ada pesanan" : "Tidak ada hasil"}
+						</h3>
+						<p className="text-muted-foreground">
+							{orders.length === 0
+								? "Pesanan dari pelanggan akan muncul di sini."
+								: "Coba ubah filter atau kata kunci pencarian."}
+						</p>
+					</div>
+				) : (
+					<div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+						<Table>
+							<TableHeader>
+								<TableRow className="hover:bg-transparent">
+									<TableHead className="font-semibold">Pelanggan</TableHead>
+									<TableHead className="font-semibold">Produk</TableHead>
+									<TableHead className="font-semibold">Qty</TableHead>
+									<TableHead className="font-semibold">Total</TableHead>
+									<TableHead className="font-semibold">Bayar</TableHead>
+									<TableHead className="font-semibold">Status</TableHead>
+									<TableHead className="font-semibold">Waktu</TableHead>
+									<TableHead className="font-semibold text-right">Aksi</TableHead>
 								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</div>
-			)}
+							</TableHeader>
+							<TableBody>
+								{filteredOrders.map((order) => (
+									<TableRow key={order.id} className="hover:bg-gray-50/50">
+										<TableCell>
+											<div className="space-y-0.5">
+												<p className="font-medium text-gray-900 flex items-center gap-1.5">
+													<User className="w-3.5 h-3.5 text-gray-400" />
+													{order.customer_name}
+												</p>
+												<p className="text-xs text-muted-foreground flex items-center gap-1.5">
+													<Phone className="w-3 h-3" />
+													{order.customer_phone}
+												</p>
+												{order.customer_address && (
+													<p className="text-xs text-muted-foreground flex items-start gap-1.5">
+														<MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" />
+														<span className="line-clamp-1">{order.customer_address}</span>
+													</p>
+												)}
+											</div>
+										</TableCell>
+										<TableCell>
+											<span className="font-medium text-gray-900">
+												{order.products?.name || "-"}
+											</span>
+										</TableCell>
+										<TableCell>
+											<span className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-sm font-medium">
+												{order.quantity}
+											</span>
+										</TableCell>
+										<TableCell>
+											<span className="font-medium text-emerald-600">
+												{order.products
+													? formatRupiah(order.products.price * order.quantity)
+													: "-"}
+											</span>
+										</TableCell>
+										<TableCell>
+											<span className="inline-flex items-center gap-1 text-xs font-medium text-gray-600">
+												<CreditCard className="w-3 h-3" />
+												{getPaymentLabel(order.payment_method)}
+											</span>
+										</TableCell>
+										<TableCell>
+											<Badge
+												variant="secondary"
+												className={`rounded-lg ${getStatusColor(order.status)}`}
+											>
+												{getStatusLabel(order.status)}
+											</Badge>
+										</TableCell>
+										<TableCell>
+											<span className="text-sm text-muted-foreground">
+												{new Date(order.created_at).toLocaleDateString("id-ID", {
+													day: "numeric",
+													month: "short",
+													hour: "2-digit",
+													minute: "2-digit",
+												})}
+											</span>
+										</TableCell>
+										<TableCell className="text-right">
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => setSelectedOrder(order)}
+												className="rounded-lg hover:bg-emerald-50 hover:text-emerald-600"
+											>
+												<Eye className="w-4 h-4" />
+											</Button>
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</div>
+				)
+			}
 
 			{/* Order Detail Dialog */}
 			<Dialog
@@ -491,6 +560,6 @@ export default function OrdersPage() {
 					)}
 				</DialogContent>
 			</Dialog>
-		</div>
+		</div >
 	);
 }

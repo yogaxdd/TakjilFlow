@@ -8,6 +8,8 @@ import {
 	LayoutDashboard,
 	Package,
 	ClipboardList,
+	Ticket,
+	Settings,
 	LogOut,
 	ExternalLink,
 	Menu,
@@ -20,6 +22,8 @@ const navItems = [
 	{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 	{ href: "/menu", label: "Produk", icon: Package },
 	{ href: "/orders", label: "Pesanan", icon: ClipboardList },
+	{ href: "/promo", label: "Promo", icon: Ticket },
+	{ href: "/settings", label: "Pengaturan", icon: Settings },
 ];
 
 export default function DashboardSidebar() {
