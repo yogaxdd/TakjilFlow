@@ -20,6 +20,7 @@ export interface Order {
   payment_method: string;
   promo_code: string;
   discount_amount: number;
+  order_notes: string;
   status: string;
   created_at: string;
   products?: Product;

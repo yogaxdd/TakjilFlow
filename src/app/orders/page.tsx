@@ -41,6 +41,8 @@ import {
 	CreditCard,
 	Download,
 	CheckCheck,
+	Printer,
+	StickyNote,
 } from "lucide-react";
 
 export default function OrdersPage() {
@@ -164,6 +166,53 @@ export default function OrdersPage() {
 			currency: "IDR",
 			minimumFractionDigits: 0,
 		}).format(amount);
+	};
+
+	const printReceipt = (order: Order) => {
+		const w = window.open("", "", "width=380,height=600");
+		if (!w) return;
+		const total = order.products ? order.products.price * order.quantity : 0;
+		w.document.write(`
+			<html><head><title>Receipt</title>
+			<style>
+				body { font-family: 'Segoe UI', sans-serif; padding: 24px; max-width: 340px; margin: 0 auto; }
+				.header { text-align: center; border-bottom: 2px dashed #ccc; padding-bottom: 16px; margin-bottom: 16px; }
+				.header h2 { margin: 0; color: #059669; }
+				.header p { margin: 4px 0 0; color: #888; font-size: 12px; }
+				.row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+				.row.bold { font-weight: bold; font-size: 15px; border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px; }
+				.section { margin-top: 16px; padding-top: 12px; border-top: 1px dashed #ddd; }
+				.section-title { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 4px; }
+				.footer { text-align: center; margin-top: 24px; color: #aaa; font-size: 11px; }
+				@media print { body { padding: 0; } }
+			</style></head><body>
+			<div class="header">
+				<h2>TakjilFlow</h2>
+				<p>Struk Pesanan</p>
+				<p>${new Date(order.created_at).toLocaleString("id-ID")}</p>
+			</div>
+			<div class="section">
+				<div class="section-title">Pelanggan</div>
+				<div class="row"><span>Nama</span><span>${order.customer_name}</span></div>
+				<div class="row"><span>Telepon</span><span>${order.customer_phone}</span></div>
+				${order.customer_address ? `<div class="row"><span>Alamat</span><span>${order.customer_address}</span></div>` : ""}
+			</div>
+			<div class="section">
+				<div class="section-title">Pesanan</div>
+				<div class="row"><span>${order.products?.name || "-"} x${order.quantity}</span><span>Rp ${total.toLocaleString("id-ID")}</span></div>
+				${order.discount_amount > 0 ? `<div class="row"><span>Diskon</span><span>-Rp ${order.discount_amount.toLocaleString("id-ID")}</span></div>` : ""}
+				<div class="row bold"><span>TOTAL</span><span>Rp ${(total - (order.discount_amount || 0)).toLocaleString("id-ID")}</span></div>
+			</div>
+			<div class="section">
+				<div class="row"><span>Pembayaran</span><span>${getPaymentLabel(order.payment_method)}</span></div>
+				<div class="row"><span>Status</span><span>${getStatusLabel(order.status)}</span></div>
+				${order.order_notes ? `<div class="row"><span>Catatan</span><span>${order.order_notes}</span></div>` : ""}
+			</div>
+			<div class="footer">Terima kasih! \u{1F31F}</div>
+			</body></html>
+		`);
+		w.document.close();
+		w.print();
 	};
 
 	const getStatusLabel = (status: string) => {
@@ -514,8 +563,26 @@ export default function OrdersPage() {
 								</div>
 							</div>
 
+							{/* Order Notes */}
+							{selectedOrder.order_notes && (
+								<div className="rounded-xl bg-yellow-50 border border-yellow-100 p-3">
+									<div className="flex items-center gap-1.5 text-xs text-yellow-700 font-medium mb-1">
+										<StickyNote className="w-3.5 h-3.5" /> Catatan Pelanggan
+									</div>
+									<p className="text-sm text-yellow-800">{selectedOrder.order_notes}</p>
+								</div>
+							)}
+
 							{/* Action Buttons */}
 							<div className="flex flex-wrap gap-2">
+								<Button
+									onClick={() => printReceipt(selectedOrder)}
+									variant="outline"
+									className="rounded-xl gap-1.5"
+									size="sm"
+								>
+									<Printer className="w-3.5 h-3.5" /> Cetak Struk
+								</Button>
 								{selectedOrder.status === "pending" && (
 									<>
 										<Button

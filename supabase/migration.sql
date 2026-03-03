@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_method TEXT NOT NULL DEFAULT 'cod',
   promo_code TEXT DEFAULT '',
   discount_amount INTEGER NOT NULL DEFAULT 0,
+  order_notes TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

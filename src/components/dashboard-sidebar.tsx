@@ -10,6 +10,8 @@ import {
 	ClipboardList,
 	Ticket,
 	Settings,
+	Users,
+	FileBarChart,
 	LogOut,
 	ExternalLink,
 	Menu,
@@ -22,6 +24,8 @@ const navItems = [
 	{ href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
 	{ href: "/menu", label: "Produk", icon: Package },
 	{ href: "/orders", label: "Pesanan", icon: ClipboardList },
+	{ href: "/customers", label: "Pelanggan", icon: Users },
+	{ href: "/report", label: "Laporan", icon: FileBarChart },
 	{ href: "/promo", label: "Promo", icon: Ticket },
 	{ href: "/settings", label: "Pengaturan", icon: Settings },
 ];
