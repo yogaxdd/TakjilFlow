@@ -12,11 +12,15 @@ CREATE TABLE IF NOT EXISTS seller_profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
   store_name TEXT DEFAULT 'Toko Saya',
+  store_slug TEXT UNIQUE,
   store_description TEXT DEFAULT '',
   whatsapp_number TEXT DEFAULT '',
   banner_url TEXT DEFAULT '',
   ewallet_number TEXT DEFAULT '',
   ewallet_name TEXT DEFAULT '',
+  qris_url TEXT DEFAULT '',
+  bank_name TEXT DEFAULT '',
+  payment_config JSONB DEFAULT '{"qris":true,"dana":true,"gopay":true,"shopeepay":true,"cod":true,"bank":false}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -187,3 +191,25 @@ USING (
   bucket_id = 'product-images'
   AND auth.uid()::text = (storage.foldername(name))[1]
 );
+
+-- =============================================
+-- ALTERATIONS FOR EXISTING DATABASES
+-- Run these in Supabase SQL Editor if tables already exist
+-- =============================================
+
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'cod',
+  ADD COLUMN IF NOT EXISTS order_notes TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS promo_code TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS discount_amount INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS customer_address TEXT DEFAULT '';
+
+ALTER TABLE seller_profiles
+  ADD COLUMN IF NOT EXISTS store_slug TEXT UNIQUE,
+  ADD COLUMN IF NOT EXISTS qris_url TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS bank_name TEXT DEFAULT '',
+  ADD COLUMN IF NOT EXISTS payment_config JSONB DEFAULT '{"qris":true,"dana":true,"gopay":true,"shopeepay":true,"cod":true,"bank":false}'::jsonb;
+
+-- Refresh schema cache
+NOTIFY pgrst, 'reload schema';
+

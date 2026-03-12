@@ -16,6 +16,7 @@ import {
 	ExternalLink,
 	Menu,
 	X,
+	QrCode,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
@@ -27,6 +28,7 @@ const navItems = [
 	{ href: "/customers", label: "Pelanggan", icon: Users },
 	{ href: "/report", label: "Laporan", icon: FileBarChart },
 	{ href: "/promo", label: "Promo", icon: Ticket },
+	{ href: "/qr", label: "QR Standee", icon: QrCode },
 	{ href: "/settings", label: "Pengaturan", icon: Settings },
 ];
 
@@ -42,7 +44,14 @@ export default function DashboardSidebar() {
 			const {
 				data: { user },
 			} = await supabase.auth.getUser();
-			if (user) setUserId(user.id);
+			if (user) {
+				const { data: profile } = await supabase
+					.from("seller_profiles")
+					.select("store_slug")
+					.eq("user_id", user.id)
+					.single();
+				setUserId(profile?.store_slug || user.id);
+			}
 		};
 		getUser();
 	}, [supabase]);

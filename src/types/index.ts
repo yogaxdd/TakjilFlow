@@ -46,11 +46,15 @@ export interface SellerProfile {
   id: string;
   user_id: string;
   store_name: string;
+  store_slug: string | null;
   store_description: string;
   whatsapp_number: string;
   banner_url: string;
   ewallet_number: string;
   ewallet_name: string;
+  qris_url: string;
+  bank_name: string;
+  payment_config: Record<string, boolean>;
   created_at: string;
 }
 

@@ -31,11 +31,46 @@ export default function DashboardPage() {
 	const [loading, setLoading] = useState(true);
 	const [userId, setUserId] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
+	const [smartInsight, setSmartInsight] = useState("");
+	const [realtimeAlert, setRealtimeAlert] = useState<string | null>(null);
 
 	const supabase = createClient();
 
 	useEffect(() => {
 		fetchDashboardData();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	// Supabase Realtime — new order notification
+	useEffect(() => {
+		const channel = supabase
+			.channel("orders-realtime")
+			.on(
+				"postgres_changes",
+				{ event: "INSERT", schema: "public", table: "orders" },
+				(payload) => {
+					const name = payload.new?.customer_name || "Seseorang";
+					const msg = `🛒 Pesanan baru dari ${name}!`;
+					setRealtimeAlert(msg);
+					toast.success(msg, { description: "Cek halaman Pesanan.", duration: 6000 });
+					// subtle audio click
+					try {
+						const ctx = new AudioContext();
+						const osc = ctx.createOscillator();
+						const gain = ctx.createGain();
+						osc.connect(gain); gain.connect(ctx.destination);
+						osc.frequency.value = 880;
+						gain.gain.setValueAtTime(0.4, ctx.currentTime);
+						gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+						osc.start(); osc.stop(ctx.currentTime + 0.4);
+					} catch {/* ignore */ }
+					setTimeout(() => setRealtimeAlert(null), 8000);
+					// refresh stats
+					setTimeout(() => fetchDashboardData(), 1500);
+				}
+			)
+			.subscribe();
+		return () => { supabase.removeChannel(channel); };
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -46,7 +81,14 @@ export default function DashboardPage() {
 		try {
 			const { data: { user } } = await supabase.auth.getUser();
 			if (!user) return;
-			setUserId(user.id);
+
+			const { data: profile } = await supabase
+				.from("seller_profiles")
+				.select("store_slug")
+				.eq("user_id", user.id)
+				.single();
+
+			setUserId(profile?.store_slug || user.id);
 
 			const { data: products } = await supabase
 				.from("products").select("*").eq("user_id", user.id);
@@ -100,6 +142,19 @@ export default function DashboardPage() {
 			setBestSelling(
 				Object.values(productSales).sort((a, b) => b.totalSold - a.totalSold).slice(0, 5)
 			);
+
+			// Smart Insights
+			const topProducts = Object.values(productSales).sort((a, b) => b.totalSold - a.totalSold);
+			if (topProducts.length > 0 && totalRevenue > 0) {
+				const top = topProducts[0];
+				const pct = Math.round((top.revenue / totalRevenue) * 100);
+				const insight = pct >= 50
+					? `\u26a1 "${top.name}" menyumbang ${pct}% pendapatan. Pastikan stok selalu cukup!`
+					: averageOrderValue > 30000
+						? `\ud83d\udca1 Rata-rata pesanan Rp ${averageOrderValue.toLocaleString("id-ID")}. Coba buat paket bundling untuk meningkatkan nilai pesanan.`
+						: `\ud83d\udcc8 "${top.name}" adalah produk terlaris. Pertimbangkan menambah varian.`;
+				setSmartInsight(insight);
+			}
 
 			// Build chart data for last 7 days
 			const last7Days: SalesData[] = [];
@@ -170,8 +225,27 @@ export default function DashboardPage() {
 				</div>
 			</div>
 
+			{/* Real-time Alert Banner */}
+			{realtimeAlert && (
+				<div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 animate-in slide-in-from-top-2 duration-300">
+					<span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+						<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+						<span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+					</span>
+					<span className="text-sm font-medium text-emerald-800">{realtimeAlert}</span>
+				</div>
+			)}
+
+			{/* Smart Insight */}
+			{smartInsight && (
+				<div className="flex items-start gap-3 bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
+					<BarChart3 className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+					<p className="text-sm text-amber-800 font-medium">{smartInsight}</p>
+				</div>
+			)}
+
 			{/* Revenue Highlight */}
-			<div className="bg-gradient-to-r from-emerald-600 to-emerald-700 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200">
+			<div className="bg-emerald-600 rounded-2xl p-6 text-white shadow-md">
 				<div className="flex items-center justify-between">
 					<div>
 						<p className="text-emerald-100 text-sm font-medium">Total Pendapatan</p>
@@ -213,9 +287,9 @@ export default function DashboardPage() {
 							{bestSelling.map((product, i) => (
 								<div key={product.name} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50">
 									<div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${i === 0 ? "bg-yellow-100 text-yellow-700" :
-											i === 1 ? "bg-gray-200 text-gray-600" :
-												i === 2 ? "bg-orange-100 text-orange-700" :
-													"bg-gray-100 text-gray-500"
+										i === 1 ? "bg-gray-200 text-gray-600" :
+											i === 2 ? "bg-orange-100 text-orange-700" :
+												"bg-gray-100 text-gray-500"
 										}`}>
 										{i + 1}
 									</div>
@@ -262,9 +336,9 @@ export default function DashboardPage() {
 								</div>
 								<div className="text-right">
 									<Badge variant="secondary" className={`rounded-lg ${order.status === "pending" ? "bg-orange-50 text-orange-600 border-orange-200" :
-											order.status === "confirmed" ? "bg-blue-50 text-blue-600 border-blue-200" :
-												order.status === "done" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
-													"bg-red-50 text-red-600 border-red-200"
+										order.status === "confirmed" ? "bg-blue-50 text-blue-600 border-blue-200" :
+											order.status === "done" ? "bg-emerald-50 text-emerald-600 border-emerald-200" :
+												"bg-red-50 text-red-600 border-red-200"
 										}`}>
 										{order.status === "pending" ? "Menunggu" :
 											order.status === "confirmed" ? "Dikonfirmasi" :

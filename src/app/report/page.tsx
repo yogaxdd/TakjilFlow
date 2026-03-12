@@ -88,7 +88,7 @@ export default function ReportPage() {
 	// Payment method breakdown
 	const paymentBreakdown: { [key: string]: number } = {};
 	filtered.forEach((o) => {
-		const m = o.payment_method || "cod";
+		const m = (o.payment_method || "cod").toLowerCase();
 		paymentBreakdown[m] = (paymentBreakdown[m] || 0) + 1;
 	});
 
@@ -219,8 +219,11 @@ export default function ReportPage() {
 							<div className="space-y-3">
 								{Object.entries(paymentBreakdown).sort((a, b) => b[1] - a[1]).map(([method, count]) => {
 									const pct = filtered.length > 0 ? Math.round((count / filtered.length) * 100) : 0;
-									const label = method === "qris" ? "QRIS" : method === "dana" ? "Dana" :
-										method === "gopay" ? "GoPay" : method === "shopeepay" ? "ShopeePay" : "COD";
+									const labels: Record<string, string> = {
+						qris: "QRIS", dana: "Dana", gopay: "GoPay",
+						shopeepay: "ShopeePay", cod: "COD", bank: "Transfer Bank",
+					};
+					const label = labels[method] || method.toUpperCase();
 									return (
 										<div key={method} className="space-y-1">
 											<div className="flex justify-between text-sm">

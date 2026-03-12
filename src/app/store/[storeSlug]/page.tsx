@@ -23,7 +23,7 @@ interface CartItem {
 
 export default function StorePage() {
 	const params = useParams();
-	const sellerId = params.sellerId as string;
+	const storeSlug = params.storeSlug as string;
 	const [products, setProducts] = useState<Product[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [cart, setCart] = useState<CartItem[]>([]);
@@ -36,16 +36,52 @@ export default function StorePage() {
 	const [orderSuccess, setOrderSuccess] = useState(false);
 	const [showCart, setShowCart] = useState(false);
 	const [remainingStock, setRemainingStock] = useState<{ [key: string]: number }>({});
+	const [storeName, setStoreName] = useState("TakjilFlow Store");
+	const [storeDesc, setStoreDesc] = useState("");
+	const [bannerUrl, setBannerUrl] = useState("");
+	const [qrisUrl, setQrisUrl] = useState("");
+	const [ewalletNumber, setEwalletNumber] = useState("");
+	const [ewalletName, setEwalletName] = useState("");
+	const [bankName, setBankName] = useState("");
+	const [paymentConfig, setPaymentConfig] = useState<Record<string, boolean>>({ qris: true, dana: true, gopay: true, shopeepay: true, cod: true, bank: false });
 
 	const supabase = createClient();
 
 	useEffect(() => {
 		fetchProducts();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [sellerId]);
+	}, [storeSlug]);
 
 	const fetchProducts = async () => {
 		try {
+			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(storeSlug);
+			let profileQuery = supabase.from("seller_profiles").select("*");
+
+			if (isUUID) {
+				profileQuery = profileQuery.eq("user_id", storeSlug);
+			} else {
+				profileQuery = profileQuery.eq("store_slug", storeSlug);
+			}
+
+			const { data: profile } = await profileQuery.single();
+
+			let sellerId = storeSlug;
+			if (profile) {
+				sellerId = profile.user_id;
+				setStoreName(profile.store_name || "TakjilFlow Store");
+				setStoreDesc(profile.store_description || "");
+				setBannerUrl(profile.banner_url || "");
+				setQrisUrl(profile.qris_url || "");
+				setEwalletNumber(profile.ewallet_number || "");
+				setEwalletName(profile.ewallet_name || "");
+				setBankName(profile.bank_name || "");
+				setPaymentConfig(profile.payment_config || { qris: true, dana: true, gopay: true, shopeepay: true, cod: true, bank: false });
+			} else if (!isUUID) {
+				toast.error("Toko tidak ditemukan");
+				setLoading(false);
+				return;
+			}
+
 			const { data } = await supabase
 				.from("products")
 				.select("*")
@@ -188,13 +224,15 @@ export default function StorePage() {
 		);
 	}
 
-	const paymentMethods = [
+	const allPaymentMethods = [
 		{ id: "qris", label: "QRIS", icon: QrCode, color: "text-purple-600 bg-purple-50 border-purple-200" },
 		{ id: "dana", label: "Dana", icon: Smartphone, color: "text-blue-600 bg-blue-50 border-blue-200" },
 		{ id: "gopay", label: "GoPay", icon: Smartphone, color: "text-green-600 bg-green-50 border-green-200" },
 		{ id: "shopeepay", label: "ShopeePay", icon: Smartphone, color: "text-orange-600 bg-orange-50 border-orange-200" },
+		{ id: "bank", label: bankName ? `Transfer ${bankName}` : "Transfer Bank", icon: CreditCard, color: "text-indigo-600 bg-indigo-50 border-indigo-200" },
 		{ id: "cod", label: "COD", icon: Truck, color: "text-gray-700 bg-gray-50 border-gray-200" },
 	];
+	const paymentMethods = allPaymentMethods.filter(pm => paymentConfig[pm.id] !== false);
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-orange-50">
@@ -202,14 +240,17 @@ export default function StorePage() {
 			<header className="bg-white/90 backdrop-blur-md border-b border-emerald-100/50 sticky top-0 z-30">
 				<div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
 					<div className="flex items-center gap-3">
-						<div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-md">
-							<Store className="w-5 h-5 text-white" />
-						</div>
+						<img
+							src="/logo.png"
+							alt={storeName}
+							width={36}
+							height={36}
+							className="rounded-xl"
+							onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+						/>
 						<div>
-							<h1 className="text-base sm:text-lg font-bold text-gray-900">
-								Takjil<span className="text-emerald-600">Flow</span>
-							</h1>
-							<p className="text-[11px] text-muted-foreground">Pesan takjil favorit 🌙</p>
+							<h1 className="text-base sm:text-lg font-bold text-gray-900">{storeName}</h1>
+							{storeDesc && <p className="text-[11px] text-muted-foreground truncate max-w-[160px]">{storeDesc}</p>}
 						</div>
 					</div>
 					{/* Cart Button (mobile) */}
@@ -232,10 +273,12 @@ export default function StorePage() {
 				<div className="lg:grid lg:grid-cols-5 lg:gap-8">
 					{/* Product Grid */}
 					<div className="lg:col-span-3">
-						<h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-							<ShoppingBag className="w-6 h-6 text-emerald-600" />
-							Menu Takjil
-						</h2>
+						<div className="mb-5">
+							<h2 className="text-xl sm:text-2xl font-bold text-gray-900">{storeName}</h2>
+							<p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
+								<ShoppingBag className="w-4 h-4 text-emerald-600" /> Menu Takjil
+							</p>
+						</div>
 
 						{products.length === 0 ? (
 							<div className="bg-white rounded-2xl shadow-sm p-12 text-center">
@@ -353,6 +396,10 @@ export default function StorePage() {
 								paymentMethod={paymentMethod}
 								setPaymentMethod={setPaymentMethod}
 								paymentMethods={paymentMethods}
+								qrisUrl={qrisUrl}
+								ewalletNumber={ewalletNumber}
+								ewalletName={ewalletName}
+								bankName={bankName}
 								totalPrice={totalPrice}
 								submitting={submitting}
 								handleSubmit={handleSubmit}
@@ -392,6 +439,10 @@ export default function StorePage() {
 								paymentMethod={paymentMethod}
 								setPaymentMethod={setPaymentMethod}
 								paymentMethods={paymentMethods}
+								qrisUrl={qrisUrl}
+								ewalletNumber={ewalletNumber}
+								ewalletName={ewalletName}
+								bankName={bankName}
 								totalPrice={totalPrice}
 								submitting={submitting}
 								handleSubmit={handleSubmit}
@@ -431,7 +482,8 @@ function CartPanel({
 	cart, removeFromCart, addToCart, customerName, setCustomerName,
 	customerPhone, setCustomerPhone, customerAddress, setCustomerAddress,
 	orderNotes, setOrderNotes, paymentMethod, setPaymentMethod,
-	paymentMethods, totalPrice, submitting, handleSubmit, formatRupiah,
+	paymentMethods, qrisUrl, ewalletNumber, ewalletName, bankName,
+	totalPrice, submitting, handleSubmit, formatRupiah,
 }: {
 	cart: CartItem[];
 	removeFromCart: (id: string) => void;
@@ -447,54 +499,62 @@ function CartPanel({
 	paymentMethod: string;
 	setPaymentMethod: (v: string) => void;
 	paymentMethods: { id: string; label: string; icon: React.ComponentType<{ className?: string }>; color: string }[];
+	qrisUrl: string;
+	ewalletNumber: string;
+	ewalletName: string;
+	bankName: string;
 	totalPrice: number;
 	submitting: boolean;
 	handleSubmit: (e: React.FormEvent) => void;
 	formatRupiah: (n: number) => string;
 }) {
+	// Empty cart = show prompt to pick products first (product-first UX)
+	if (cart.length === 0) {
+		return (
+			<div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+				<ShoppingBag className="w-12 h-12 mx-auto mb-4 text-gray-200" />
+				<p className="font-semibold text-gray-700 mb-1">Keranjang Kosong</p>
+				<p className="text-sm text-muted-foreground">Pilih produk di menu sebelah kiri untuk mulai memesan.</p>
+			</div>
+		);
+	}
 	return (
 		<form onSubmit={handleSubmit} className="space-y-5">
 			{/* Cart Items */}
-			{cart.length === 0 ? (
-				<div className="text-center py-8">
-					<ShoppingBag className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-					<p className="text-muted-foreground text-sm">Keranjang masih kosong</p>
-					<p className="text-xs text-muted-foreground mt-1">Tambah produk dari menu</p>
-				</div>
-			) : (
-				<div className="space-y-2">
-					{cart.map((item) => (
-						<div key={item.product.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
-							{item.product.image_url ? (
-								<img src={item.product.image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />
-							) : (
-								<div className="w-12 h-12 rounded-lg bg-gray-200 flex items-center justify-center">
-									<ImageIcon className="w-5 h-5 text-gray-400" />
-								</div>
-							)}
-							<div className="flex-1 min-w-0">
-								<p className="text-sm font-medium truncate">{item.product.name}</p>
-								<p className="text-xs text-emerald-600 font-semibold">{formatRupiah(item.product.price * item.quantity)}</p>
+			<div className="space-y-2">
+				{cart.map((item) => (
+					<div key={item.product.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+						{item.product.image_url ? (
+							<img src={item.product.image_url} alt="" className="w-12 h-12 rounded-lg object-cover" />
+						) : (
+							<div className="w-12 h-12 rounded-lg bg-gray-200 flex items-center justify-center">
+								<ImageIcon className="w-5 h-5 text-gray-400" />
 							</div>
-							<div className="flex items-center gap-1.5">
-								<button type="button" onClick={() => removeFromCart(item.product.id)}
-									className="w-7 h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-red-50">
-									<Minus className="w-3 h-3" />
-								</button>
-								<span className="w-6 text-center text-sm font-bold">{item.quantity}</span>
-								<button type="button" onClick={() => addToCart(item.product)}
-									className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center hover:bg-emerald-700">
-									<Plus className="w-3 h-3 text-white" />
-								</button>
-							</div>
+						)}
+						<div className="flex-1 min-w-0">
+							<p className="text-sm font-medium truncate">{item.product.name}</p>
+							<p className="text-xs text-emerald-600 font-semibold">{formatRupiah(item.product.price * item.quantity)}</p>
 						</div>
-					))}
-					<div className="flex justify-between items-center pt-2 border-t border-gray-100">
-						<span className="text-sm text-muted-foreground">Total</span>
-						<span className="text-lg font-bold text-emerald-600">{formatRupiah(totalPrice)}</span>
+						<div className="flex items-center gap-1.5">
+							<button type="button" onClick={() => removeFromCart(item.product.id)}
+								className="w-7 h-7 rounded-lg bg-white border flex items-center justify-center hover:bg-red-50">
+								<Minus className="w-3 h-3" />
+							</button>
+							<span className="w-6 text-center text-sm font-bold">{item.quantity}</span>
+							<button type="button" onClick={() => addToCart(item.product)}
+								className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center hover:bg-emerald-700">
+								<Plus className="w-3 h-3 text-white" />
+							</button>
+						</div>
 					</div>
+				))}
+				<div className="flex justify-between items-center pt-2 border-t border-gray-100">
+					<span className="text-sm text-muted-foreground">Total</span>
+					<span className="text-lg font-bold text-emerald-600">{formatRupiah(totalPrice)}</span>
 				</div>
-			)}
+			</div>
+
+
 
 			{/* Customer Info */}
 			<div className="space-y-3">
@@ -536,8 +596,8 @@ function CartPanel({
 							type="button"
 							onClick={() => setPaymentMethod(pm.id)}
 							className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-xs font-medium ${paymentMethod === pm.id
-									? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
-									: "border-gray-200 hover:border-gray-300 text-gray-600"
+								? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm"
+								: "border-gray-200 hover:border-gray-300 text-gray-600"
 								}`}
 						>
 							<pm.icon className="w-4 h-4" />
@@ -551,7 +611,7 @@ function CartPanel({
 					<div className="bg-purple-50 rounded-xl p-3 border border-purple-100">
 						<p className="text-xs text-purple-700 font-medium mb-2 text-center">Scan QRIS berikut:</p>
 						<div className="bg-white rounded-lg p-2 flex justify-center">
-							<img src="/qris.png" alt="QRIS" className="h-36 w-auto" />
+							{qrisUrl ? <img src={qrisUrl} alt="QRIS" className="h-40 w-auto object-contain" /> : <p className="text-xs text-purple-500 py-4 text-center">QRIS belum tersedia. Hubungi penjual.</p>}
 						</div>
 					</div>
 				)}
